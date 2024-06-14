@@ -2277,6 +2277,9 @@ class Scheduler:
         return self.backends[device]
 
     def enter_context(self, node):
+        if hasattr(node, "is_flex_ai_node"):
+            return
+
         def get_order(n):
             if n not in self.origin_to_index:
                 self.origin_to_index.update({n: i for i, n in enumerate(n.graph.nodes)})
@@ -2308,7 +2311,7 @@ class Scheduler:
 
             self.enter_context(node)
 
-            if not isinstance(node, NopKernelSchedulerNode):
+            if not isinstance(node, NopKernelSchedulerNode) and not hasattr(node, "is_flex_ai_node"):
                 device = node.get_device()
                 if (
                     device != self.current_device
@@ -2325,6 +2328,10 @@ class Scheduler:
                     elif self.current_device and self.current_device.type == "cuda":
                         V.graph.wrapper_code.codegen_device_guard_exit()
                     self.current_device = device
+
+            if hasattr(node, "is_flex_ai_node"):
+                node.codegen(V)
+                continue
 
             self.buffer_names_to_free.update(node.last_usage)
 
