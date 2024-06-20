@@ -61,6 +61,7 @@
 #include <c10/core/impl/DeviceGuardImplInterface.h>
 #include <algorithm>
 #include <numeric>
+#include <iostream>
 
 namespace at::native {
 
@@ -394,6 +395,17 @@ static inline bool is_null_or_equal_to(const std::optional<T>& test, const T& va
   return test.value() == value;
 }
 
+template <typename T>
+static inline bool devices_share_address_space(
+    const std::optional<T>& to,
+    const T& from) {
+	bool ret = to.value().type() == DeviceType::CPU && from.type() == DeviceType::CUDA;
+        // std::cout << "ret:" << ret << "to: " << to.value() << ", from: " << from
+	// 	  << std::endl
+	// 	  << std::flush;
+	return ret;
+}
+
 // NOTE: static runtime's to_maybe_copy_out relies on details of this
 // check; if you change how it works, please update static runtime as
 // well.
@@ -408,7 +420,7 @@ bool to_will_alias(
 
   return is_null_or_equal_to(dtype, self.dtype().toScalarType()) &&
     is_null_or_equal_to(layout, self.layout()) &&
-    is_null_or_equal_to(device, self.device()) &&
+    (is_null_or_equal_to(device, self.device()) || devices_share_address_space(device, self.device())) &&
     !copy &&
     (memory_format == MemoryFormat::Preserve ||
      self.suggest_memory_format() == memory_format);
