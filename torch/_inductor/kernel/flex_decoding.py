@@ -280,7 +280,7 @@ flex_decoding_reduction_template = TritonTemplate(
 
     off_h = tl.program_id(0) % H
     off_z = tl.program_id(0) // H
-    off_m = tl.program_id(1) * BLOCK_Mfd
+    off_m = tl.program_id(1) * BLOCK_M
     off_d = tl.program_id(2) * BLOCK_D
 
     m_offset = off_h * stride_mh + off_z * stride_mz
