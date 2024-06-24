@@ -84,7 +84,7 @@ flex_decoding_template = TritonTemplate(
     MATMUL_PRECISION = Q.dtype.element_ty
 
     off_z = tl.program_id(0) // H
-    off_h = tl.program_id(1) % H    
+    off_h = tl.program_id(0) % H    
     off_t = tl.program_id(1) 
     off_n = off_t * TILE_KV 
 

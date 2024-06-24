@@ -528,7 +528,6 @@ class TestFlexAttention(InductorTestCase):
         )
 
 
-    # @skip("TODO: fix strided inputs for flex decoding")
     @supported_platform
     @common_utils.parametrize("dtype", test_dtypes_fast)
     @common_utils.parametrize("k_s", test_input_strides)
@@ -538,10 +537,10 @@ class TestFlexAttention(InductorTestCase):
         Hq, Hkv = head_dims
         assert Hq % Hkv == 0
         q1 = torch.randn((B*Hq*D), dtype=dtype, device="cuda")
-        k1 = torch.randn((B*Hkv*S*D*2), dtype=dtype, device="cuda")
-        v1 = torch.randn((B*Hkv*S*D*2), dtype=dtype, device="cuda")
+        k1 = torch.randn((B*Hkv*S*D*4), dtype=dtype, device="cuda")
+        v1 = torch.randn((B*Hkv*S*D*4), dtype=dtype, device="cuda")
 
-        q_shape = (B, Hkv, Hq//Hkv, D)
+        q_shape = (B, H, Hq//Hkv, D)
         k_shape = (B, Hkv, S, D)
         v_shape = (B, Hkv, S, D)
 
@@ -551,14 +550,14 @@ class TestFlexAttention(InductorTestCase):
 
         k_strides, k_offset = k_s(B, Hkv, S, D)
         k_max = [ x*(y-1) for x, y in zip(k_strides, k_shape) ]
-        assert sum(k_max) + k_offset < B*Hkv*S*D*2
+        assert sum(k_max) + k_offset < B*Hkv*S*D*4
         assert k_strides[-1] == 1      
         k = torch.as_strided(k1, k_shape, k_strides, k_offset)
 
 
         v_strides, v_offset = v_s(B, Hkv, S, D)
         v_max = [ x*(y-1) for x, y in zip(v_strides, v_shape)]
-        assert sum(v_max) + v_offset < B*Hkv*S*D*2
+        assert sum(v_max) + v_offset < B*Hkv*S*D*4
         assert v_strides[-1] == 1
         v = torch.as_strided(v1, v_shape, v_strides, v_offset)
 
@@ -613,6 +612,9 @@ class TestFlexAttention(InductorTestCase):
         batch_scale = torch.randn(B, device="cuda")
         kv_scale = torch.randn(S, device="cuda")
         q_scale = torch.randn(Hq//Hkv if decoding else S, device="cuda")
+        if q_scale.shape[-1] < 16:
+            q_scale = torch.nn.functional.pad(q_scale, (0, 16-Hq//Hkv))
+        print(q_scale.shape)
 
         def all_bias(score, batch, head, token_q, token_kv):
             score = score + kv_scale[token_kv]
