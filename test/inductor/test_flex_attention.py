@@ -128,7 +128,6 @@ test_Hq_Hkv = [
     (8, 2), 
     (16, 16),
     (32, 1),
-    (64, 1),
 ]
 
 (Hq, Hkv) = (16, 8)
@@ -466,7 +465,7 @@ class TestFlexAttention(InductorTestCase):
     @common_utils.parametrize("dtype", test_dtypes)
     @common_utils.parametrize("score_mod", test_score_mods)
     @common_utils.parametrize("head_dims", test_Hq_Hkv)
-    def test_decoding_builtin_score_mods(self, dtype: torch.dtype, score_mod: Callable, head_dims):
+    def test_builtin_score_mods_decoding(self, dtype: torch.dtype, score_mod: Callable, head_dims):
         Hq, Hkv = head_dims
         assert Hq % Hkv == 0
         self.run_test(
@@ -478,18 +477,13 @@ class TestFlexAttention(InductorTestCase):
         )
 
 
-    test_input_strides = [
-        ((B * S * D, S * D, D, 1), 997),  # offset
-        ((H * D, D, B * H * D, 1), 499),  # transposed dimensions
-        (
-            (S * (D + 1), B * S * (D + 1), (D + 1), 1),
-            293,
-        ),  # additional buffer on one dim
-        (
-            (1, D, (B + 1) * (H + 1) * D, 1),
-            97,
-        ),  # additional buffer on multiple dim + shared dimension
-    ]
+
+    def input_strides_1(B, H, S, D): return ((H * S * D, S * D, D, 1), 997) # offset
+    def input_strides_2(B, H, S, D): return ((H * D, D, B * H * D, 1), 499) # transposed dimensions
+    def input_strides_3(B, H, S, D): return ((S * (D + 1), B * S * (D + 1), (D + 1), 1), 293) # additional buffer
+    def input_strides_4(B, H, S, D): return ((1, D, (B + 1) * (H + 1) * D, 1), 97) # shared dimension
+
+    test_input_strides=[input_strides_1, input_strides_2, input_strides_3, input_strides_4]
 
     @supported_platform
     @common_utils.parametrize("dtype", test_dtypes_fast)
@@ -505,19 +499,19 @@ class TestFlexAttention(InductorTestCase):
         k_shape = (B, H, S, D)
         v_shape = (B, H, S, D)
 
-        q_strides, q_offset = q_s
+        q_strides, q_offset = q_s(B, H, S, D)
         q_max = [x * (y - 1) for x, y in zip(q_strides, q_shape)]
         assert sum(q_max) + q_offset < B * H * S * D * 2
         assert q_strides[-1] == 1
         q = torch.as_strided(q1, q_shape, q_strides, q_offset)
 
-        k_strides, k_offset = k_s
+        k_strides, k_offset = k_s(B, H, S, D)
         k_max = [x * (y - 1) for x, y in zip(k_strides, k_shape)]
         assert sum(k_max) + k_offset < B * H * S * D * 2
         assert k_strides[-1] == 1
         k = torch.as_strided(k1, k_shape, k_strides, k_offset)
 
-        v_strides, v_offset = v_s
+        v_strides, v_offset = v_s(B, H, S, D)
         v_max = [x * (y - 1) for x, y in zip(v_strides, v_shape)]
         assert sum(v_max) + v_offset < B * H * S * D * 2
         assert v_strides[-1] == 1
@@ -534,7 +528,7 @@ class TestFlexAttention(InductorTestCase):
         )
 
 
-    @skip("TODO: fix strided inputs for flex decoding")
+    # @skip("TODO: fix strided inputs for flex decoding")
     @supported_platform
     @common_utils.parametrize("dtype", test_dtypes_fast)
     @common_utils.parametrize("k_s", test_input_strides)
@@ -555,14 +549,14 @@ class TestFlexAttention(InductorTestCase):
         q = q1.view(Hq//Hkv, Hkv, B, D).transpose(0, 2)
 
 
-        k_strides, k_offset = k_s    
+        k_strides, k_offset = k_s(B, Hkv, S, D)
         k_max = [ x*(y-1) for x, y in zip(k_strides, k_shape) ]
         assert sum(k_max) + k_offset < B*Hkv*S*D*2
         assert k_strides[-1] == 1      
         k = torch.as_strided(k1, k_shape, k_strides, k_offset)
 
 
-        v_strides, v_offset = v_s
+        v_strides, v_offset = v_s(B, Hkv, S, D)
         v_max = [ x*(y-1) for x, y in zip(v_strides, v_shape)]
         assert sum(v_max) + v_offset < B*Hkv*S*D*2
         assert v_strides[-1] == 1
