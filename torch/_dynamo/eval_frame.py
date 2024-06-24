@@ -1,3 +1,4 @@
+# mypy: allow-untyped-defs
 # mypy: disable-error-code="method-assign"
 
 """
@@ -41,7 +42,7 @@ import torch.fx
 import torch.utils._pytree as pytree
 import torch.utils.checkpoint
 from torch import _guards
-from torch._utils_internal import log_export_usage
+from torch._utils_internal import justknobs_check, log_export_usage
 from torch.export.dynamic_shapes import _process_dynamic_shapes
 from torch.fx.experimental.proxy_tensor import make_fx, maybe_disable_fake_tensor_mode
 from torch.fx.experimental.symbolic_shapes import (
@@ -153,8 +154,9 @@ class OptimizedModule(torch.nn.Module):
         if isinstance(self.dynamo_ctx, DisableContext):
             # No need to check trace rules
             self.forward = self.dynamo_ctx(self._orig_mod.__call__)
-        elif isinstance(self._orig_mod.forward, types.MethodType) and trace_rules.check(
-            self._orig_mod.forward
+        elif isinstance(self._orig_mod.forward, types.MethodType) and (
+            trace_rules.check(self._orig_mod.forward)
+            or getattr(self._orig_mod, "_is_fsdp_managed_module", False)
         ):
             # This may be a torch.nn.* instance in trace_rules.py which
             # won't trigger a frame evaluation workaround to add an extra
@@ -167,6 +169,9 @@ class OptimizedModule(torch.nn.Module):
         if hasattr(self._orig_mod, "_initialize_hook"):
             self._forward = self.forward
             self.forward = self._call_lazy_check
+
+    def __reduce__(self):
+        return (self.__class__, (self._orig_mod, self.dynamo_ctx))
 
     def __getstate__(self):
         state = dict(self.__dict__)
@@ -273,9 +278,11 @@ class _TorchDynamoContext:
         super().__init__()
         assert callable(callback) or callback is False or callback is None
         self.callback: DynamoCallback = callback
+        self._backend_ctx_ctor = backend_ctx_ctor
         self.prior: Union[Unset, DynamoCallback] = unset
         self.first_ctx = first_ctx
         self.export = export
+        self._dynamic = dynamic
         self.compiler_config = compiler_config
         self.cleanup_fns: List[Callable[[], Any]] = []
         self.enter_exit_hooks = []
@@ -379,7 +386,13 @@ class _TorchDynamoContext:
             # call to a builtin without a frame for us to capture
             fn = external_utils.wrap_inline(fn)
 
-        callback = self.callback
+        def do_nothing(*arg, **kwargs):
+            pass
+
+        if hasattr(self, "callback"):
+            callback = self.callback
+        else:
+            callback = do_nothing
 
         is_jit_tracing = torch._C._is_tracing
         is_fx_tracing = torch.fx._symbolic_trace.is_fx_tracing
@@ -522,6 +535,17 @@ class OptimizeContext(_TorchDynamoContext):
 
             self.enter_exit_hooks.append(call_compiled_autograd)
 
+    def __reduce__(self):
+        return (
+            self.__class__,
+            (self.callback, self._backend_ctx_ctor, self.first_ctx),
+            {
+                "export": self.export,
+                "dynamic": self._dynamic,
+                "compiler_config": self.compiler_config,
+            },
+        )
+
 
 class RunOnlyContext(_TorchDynamoContext):
     def __init__(self):
@@ -530,6 +554,9 @@ class RunOnlyContext(_TorchDynamoContext):
             torch._dynamo.mutation_guard.GenerationTracker.generation += 1
 
         super().__init__(callback=False, on_enter=on_enter)
+
+    def __reduce__(self):
+        return (self.__class__, ())
 
 
 class DisableContext(_TorchDynamoContext):
@@ -582,6 +609,9 @@ class DisableContext(_TorchDynamoContext):
         _fn._torchdynamo_orig_callable = fn  # type: ignore[attr-defined]
 
         return _fn
+
+    def __reduce__(self):
+        return (self.__class__, ())
 
 
 def _optimize_catch_errors(
@@ -702,7 +732,11 @@ def _optimize(
     # easier to understand UX at the cost of a little more plumbing on our end.
     hooks = Hooks(guard_export_fn=guard_export_fn, guard_fail_fn=guard_fail_fn)
     torch._C._log_api_usage_once("torch._dynamo.optimize")
-    if disable or os.environ.get("TORCHDYNAMO_DISABLE", "") == "1":
+    if (
+        disable
+        or os.environ.get("TORCHDYNAMO_DISABLE", "") == "1"
+        or (not justknobs_check("pytorch/compiler:enable_dynamo"))
+    ):
         return _NullDecorator()
 
     backend = get_compiler_fn(backend)
@@ -1403,7 +1437,8 @@ def export(
         assert fake_mode is not None
 
         log.info(
-            "Dynamo captured graph:\n\n%s", graph.print_readable(print_output=False)
+            "Dynamo captured graph:\n\n%s",
+            graph.print_readable(print_output=False, colored=True),
         )
 
         # This check need to happened before aten_graph
