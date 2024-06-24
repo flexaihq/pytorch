@@ -368,7 +368,7 @@ flex_decoding_reduction_template = TritonTemplate(
 MAX_SPLIT_KV = 64
 
 
-def get_split_k(B: int, H: int, Mk: int, G=1) -> int:
+def get_split_k(B: int, H: int, Mk: int, G: int = 1) -> int:
     """Heuristic for the number of splits from xformer"""
     bh = max(B * H, 1)  # NOTE: Handle B*h=0 case
     if torch.version.hip:
@@ -403,7 +403,7 @@ def get_split_k(B: int, H: int, Mk: int, G=1) -> int:
     return split_k
 
 
-def _get_decoding_default_config(key):
+def _get_decoding_default_config(key) -> Tuple[int, int, int]:
     B = key.get_size()[0]
     H = key.get_size()[1]
     Mk = key.get_size()[-2]
@@ -417,7 +417,7 @@ def _get_decoding_default_config(key):
 
 
 # config: [BLOCK_M, BLOCK_D, num_stages, num_warps]
-def _get_reduction_default_config(buf_ACC, dtype):
+def _get_reduction_default_config(buf_ACC, dtype) -> Tuple[int, int, int, int]:
     B = buf_ACC.get_size()[0]
     H = buf_ACC.get_size()[1]
     SPLIT_KV = buf_ACC.get_size()[2]
@@ -433,9 +433,8 @@ def _get_reduction_default_config(buf_ACC, dtype):
     return default_config
 
 
-def create_flex_decoding_kernel(
-    subgraph_buffer, layout, query, key, value, subgraph, *other_buffers
-):
+def create_flex_decoding_kernel(*args, **kwargs):
+    (subgraph_buffer, layout, query, key, value, subgraph, *other_buffers) = args
     # see NOTE:[TritonTemplates with multiple outputs]
     logsumexp_shape = query.get_size()[:-1]  # [B, H, M]
     logsumexp = empty_strided(

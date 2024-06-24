@@ -21,7 +21,7 @@ from ..ir import (
     TensorBox,
 )
 
-from ..lowering import empty_strided, full, lowerings, register_lowering
+from ..lowering import empty_strided, lowerings, register_lowering
 from ..runtime.runtime_utils import next_power_of_2
 from ..select_algorithm import autotune_select_algorithm, TritonTemplate
 
