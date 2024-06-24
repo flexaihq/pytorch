@@ -227,6 +227,7 @@ def set_logs(
     cudagraphs: bool = False,
     sym_node: bool = False,
     compiled_autograd_verbose: bool = False,
+    ts2ep_conversion: bool = False,
 ):
     """
     Sets the log level for individual components and toggles individual log
@@ -490,6 +491,7 @@ def set_logs(
         export=export,
         cudagraphs=cudagraphs,
         compiled_autograd_verbose=compiled_autograd_verbose,
+        ts2ep_conversion=ts2ep_conversion,
     )
 
 
