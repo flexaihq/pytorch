@@ -19,6 +19,7 @@ from ..ir import (
 )
 from ..lowering import empty_strided, lowerings, register_lowering
 from ..select_algorithm import autotune_select_algorithm, TritonTemplate
+from ..virtualized import V
 
 log = logging.getLogger(__name__)
 aten = torch.ops.aten
@@ -403,7 +404,7 @@ def flex_attention(*args, **kwargs):
         query.get_device(),
         query.get_dtype(),
         query.get_size(),
-        query.get_stride(),
+        V.graph.current_node.meta['val'][0].stride(),
     )
     # see NOTE:[TritonTemplates with multiple outputs]
     logsumexp_shape = query.get_size()[:-1]  # [B, H, M]
