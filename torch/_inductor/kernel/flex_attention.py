@@ -404,7 +404,7 @@ def flex_attention(*args, **kwargs):
         query.get_device(),
         query.get_dtype(),
         query.get_size(),
-        V.graph.current_node.meta['val'][0].stride(),
+        V.graph.current_node.meta["val"][0].stride(),
     )
     # see NOTE:[TritonTemplates with multiple outputs]
     logsumexp_shape = query.get_size()[:-1]  # [B, H, M]
