@@ -797,7 +797,19 @@ class FakeTensor(torch.Tensor):
     # of the tensor to create the output Python list, and (2) creating unbacked
     # symints for each element of the list.
     def tolist(self):
-        assert self.dim() == 1, "NYI for higher dims"
+        import copy
+        if self.dim() > 1:
+            def _to_list(dim):
+                if dim == self.dim() - 1:
+                    return [42] * self.shape[dim]
+                cache = _to_list(dim + 1)
+                return [copy.deepcopy(cache) for _ in range(self.shape[dim])]
+            #print(f"dim: {self.dim()}, shape: {self.shape}")
+            res = _to_list(0)
+            #print("Res:", res)
+            return res
+
+        # assert self.dim() == 1, "NYI for higher dims"
         # breakpoint()
         shape_env = self.fake_mode.shape_env
         out = []
