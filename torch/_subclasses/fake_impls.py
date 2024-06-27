@@ -393,7 +393,10 @@ def nonzero(fake_mode, func, arg):
         or not fake_mode.shape_env.allow_dynamic_output_shape_ops
     ):
         # Without symints/symfloats, cannot handle this
-        raise DynamicOutputShapeException(func)
+        print("### HACK ### nonzero")
+        #raise DynamicOutputShapeException(func)
+        return arg.new_empty((1, arg.dim()), dtype=torch.int64)
+
 
     if (nnz := arg.nonzero_memo) is None:
         # Avoid importing sympy at a module level
