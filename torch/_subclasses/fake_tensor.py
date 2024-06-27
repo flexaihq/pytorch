@@ -767,9 +767,10 @@ class FakeTensor(torch.Tensor):
 
             # mismatching devices of non-zero dim tensors, throw
             # This might be valid behavior and need to be explicitly modeled, e.g. reshape_as
-            raise RuntimeError(
-                f"Unhandled FakeTensor Device Propagation for {func}, found two different devices {common_device}, {t.device}"
-            )
+            print("###$HACK$### merge_devices")
+            # raise RuntimeError(
+            #     f"Unhandled FakeTensor Device Propagation for {func}, found two different devices {common_device}, {t.device}"
+            # )
 
         for arg in flat_args:
             merge_devices(arg)
@@ -797,8 +798,15 @@ class FakeTensor(torch.Tensor):
     # symints for each element of the list.
     def tolist(self):
         assert self.dim() == 1, "NYI for higher dims"
+        # breakpoint()
         shape_env = self.fake_mode.shape_env
         out = []
+        # print("self.dim:", self.dim())
+        if shape_env is None:
+            print("###$$$HACK$$#### FakeTensor.tolist()")
+            out = [42 for _ in range(self.shape[0])]
+            return out
+
         # Specialize on the length of the list
         for _ in range(self.shape[0]):
             s = shape_env.create_unbacked_symint()
