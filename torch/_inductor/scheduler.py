@@ -2664,6 +2664,8 @@ class Scheduler:
         return self.backends[device]
 
     def enter_context(self, node: BaseSchedulerNode) -> None:
+        if hasattr(node, "is_flex_ai_node"):
+            return
         def get_order(n: torch.fx.Node) -> int:
             if n not in self.origin_to_index:
                 self.origin_to_index.update({n: i for i, n in enumerate(n.graph.nodes)})
@@ -2700,7 +2702,7 @@ class Scheduler:
 
             if not isinstance(node, NopKernelSchedulerNode) and (
                 device := node.get_device()
-            ):
+            ) and not hasattr(node, "is_flex_ai_node"):
                 if (
                     device != self.current_device
                     or node.is_extern()
@@ -2717,6 +2719,10 @@ class Scheduler:
                         V.graph.wrapper_code.codegen_device_guard_enter(device.index)
 
                     self.current_device = device
+
+            if hasattr(node, "is_flex_ai_node"):
+                node.codegen(V)
+                continue
 
             self.buffer_names_to_free.update(node.last_usage)
 
