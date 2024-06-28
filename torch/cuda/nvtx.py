@@ -64,6 +64,26 @@ def range_end(range_id) -> None:
     _nvtx.rangeEnd(range_id)
 
 
+def flex_range_start(msg) -> int:
+    """
+    TBD
+
+    Args:
+        msg (str): ASCII message to associate with the range.
+    """
+    return _nvtx.flex_rangeStart(msg)
+
+
+def flex_range_end(range_id) -> None:
+    """
+    TBD
+
+    Args:
+        range_id (int): an unique handle for the start range.
+    """
+    _nvtx.flex_rangeEnd(range_id)
+
+
 def mark(msg):
     """
     Describe an instantaneous event that occurred at some point.
