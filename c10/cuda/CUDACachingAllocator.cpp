@@ -50,6 +50,31 @@ const size_t kLargeBuffer =
 
 namespace Native {
 
+typedef cudaError_t (*FlexCudaMalloc)(void**, size_t);
+
+cudaError_t flexCUDAMalloc(void** p, size_t size) {
+  return cudaMalloc(p, size);
+}
+
+cudaError_t flexCUDAMallocManaged(void** p, size_t size) {
+  return cudaMallocManaged(p, size);
+}
+
+static const char* flex_getenv(const char* name, const char* default_value) {
+  char* value = getenv(name);
+  return value ? value : default_value;
+}
+
+static FlexCudaMalloc get_flex_cuda_malloc() {
+  static FlexCudaMalloc flexai_cuda_malloc_ptr =
+      (strcmp(flex_getenv("FLEX_ENABLE_UNIFIED_MEMORY", "0"), "1") == 0)
+      ? flexCUDAMallocManaged
+      : flexCUDAMalloc;
+  return flexai_cuda_malloc_ptr;
+}
+
+static FlexCudaMalloc flex_cuda_malloc = get_flex_cuda_malloc();
+
 //
 // Yet another caching allocator for CUDA device allocations.
 //
@@ -782,14 +807,14 @@ struct MempoolIdHash {
 cudaError_t cudaMallocMaybeCapturing(void** p, size_t size) {
   if (at::cuda::currentStreamCaptureStatusMayInitCtx() ==
       at::cuda::CaptureStatus::None) {
-    return C10_CUDA_ERROR_HANDLED(cudaMallocManaged(p, size));
+    return C10_CUDA_ERROR_HANDLED(flex_cuda_malloc(p, size));
   } else {
     // It's ok to capture cudaMallocs, as long as we never cudaFree those
     // addresses before replay.
     // Capturing cudaMalloc behaves nicely: it gives the graph new VA,
     // but is ignored (won't leakily allocate new memory) in replays.
     at::cuda::CUDAStreamCaptureModeGuard g{cudaStreamCaptureModeRelaxed};
-    return C10_CUDA_ERROR_HANDLED(cudaMallocManaged(p, size));
+    return C10_CUDA_ERROR_HANDLED(flex_cuda_malloc(p, size));
   }
 }
 
@@ -3181,7 +3206,7 @@ class NativeCachingAllocator : public CUDAAllocator {
 
       // Deliberately don't use cudaMallocMaybeCapturing here, to force an error
       // if someone tries to use forceUncachedAllocator while capturing.
-      C10_CUDA_CHECK(cudaMallocManaged(&devPtr, size, cudaMemAttachGlobal));
+      C10_CUDA_CHECK(flex_cuda_malloc(&devPtr, size));
       const c10::impl::PyInterpreter* interp = c10::impl::GPUTrace::get_trace();
       if (C10_UNLIKELY(interp)) {
         (*interp)->trace_gpu_memory_allocation(
