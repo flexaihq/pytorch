@@ -2700,9 +2700,9 @@ class Scheduler:
 
             self.enter_context(node)
 
-            if not isinstance(node, NopKernelSchedulerNode) and (
+            if not hasattr(node, "is_flex_ai_node") and not isinstance(node, NopKernelSchedulerNode) and (
                 device := node.get_device()
-            ) and not hasattr(node, "is_flex_ai_node"):
+            ):
                 if (
                     device != self.current_device
                     or node.is_extern()
