@@ -5023,6 +5023,7 @@ CUDA_IDENTIFIER_MAP = collections.OrderedDict(
             "cudaLaunchCooperativeKernel",
             ("hipLaunchCooperativeKernel", CONV_EXEC, API_RUNTIME),
         ),
+        ("cudaLaunchHostFunc", ("hipLaunchHostFunc", CONV_EXEC, API_RUNTIME, HIP_UNSUPPORTED)),
         (
             "cudaSetupArgument",
             ("hipSetupArgument", CONV_EXEC, API_RUNTIME, HIP_UNSUPPORTED),
